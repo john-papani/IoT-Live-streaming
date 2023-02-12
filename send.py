@@ -8,7 +8,7 @@ connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
 channel = connection.channel()
 MINS_INTERVAL = 0.004
 
-channel.queue_declare(queue='hello1', durable=True)
+channel.queue_declare(queue='dataQueue', durable=True)
 
 try:
     # while True :
@@ -33,7 +33,7 @@ try:
                 message = json.dumps(data)
 
                 channel.basic_publish(exchange='',
-                routing_key='hello1',
+                routing_key='dataQueue',
                 body=data,
                 properties=pika.BasicProperties(
                     delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE

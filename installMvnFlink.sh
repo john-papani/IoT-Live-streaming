@@ -1,2 +1,2 @@
 #!/bin/bash
-mvn clean install
+cd info-system-flink && mvn clean install
