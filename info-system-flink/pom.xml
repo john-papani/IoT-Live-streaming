@@ -79,19 +79,7 @@
 			<version>${scala.version}</version>
 			<!-- <scope>provided</scope> -->
 		</dependency>
-	
 
-		<!-- HBASE CONNECTOR
-		<dependency>
-			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-connector-hbase-1.4_${scala.binary.version}</artifactId>
-			<version>${flink.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-connector-hbase-1.4_${scala.binary.version}</artifactId>
-			<version>${flink.version}</version>
-		</dependency> -->
 
 		<!-- Table API & SQL -->
 		<dependency>

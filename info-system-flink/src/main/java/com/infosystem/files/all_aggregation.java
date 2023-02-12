@@ -18,7 +18,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.datastream.WindowedStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.co.CoFlatMapFunction;
+import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
 import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
 import org.apache.flink.streaming.api.windowing.time.Time;
@@ -48,7 +48,7 @@ public class all_aggregation {
         final DataStream<eachrow> stream = env
                 .addSource(new RMQSource<eachrow>(
                         connectionConfig, // config for the RabbitMQ connection
-                        "hello1", // name of the RabbitMQ queue to consume
+                        "dataQueue", // name of the RabbitMQ queue to consume
                         true, // use correlation ids; can be false if only at-least-once is
                               // required
                         new DeserializationSchema<eachrow>() {
@@ -89,6 +89,7 @@ public class all_aggregation {
                         return new Tuple2<Long, Double>(value.getTimeday() * 1000, (double) value.th1);
                     }
                 });
+
         SingleOutputStreamOperator<Tuple2<Long, Double>> onlyTh2 = rawData
                 .map(new MapFunction<eachrow, Tuple2<Long, Double>>() {
                     @Override
@@ -171,21 +172,42 @@ public class all_aggregation {
                 });
 
         // * ------------------------ END = RAW DATA ---------------------------------
-        // * ------------------------ START = LATE EVENT DATA
-        // ---------------------------------
+        // * ------------------------ START = LATE EVENT DATA ---------------------------------
 
-        DataStream<eachrow> lateEventData = stream.filter(new FilterFunction<eachrow>() {
-            @Override
-            public boolean filter(eachrow value) throws Exception {
-                return value.th1 == 0;
-            }
-        });
+        DataStream<Tuple2<Long, Double>> twoDaysLateStream = stream
+                .keyBy(event -> event.getTimeday() / (24 * 60 * 60 * 1000))
+                .process(new KeyedProcessFunction<Long, eachrow, Tuple2<Long, Double>>() {
+                    private Long previousTimestamp = null;
 
-        lateEventData.print().setParallelism(1);
-        // * ------------------------ END = LAVTE EVENT DATA
-        // ---------------------------------
+                    @Override
+                    public void processElement(eachrow event, Context ctx,
+                            Collector<Tuple2<Long, Double>> out) {
+                        if (previousTimestamp != null
+                                && previousTimestamp - event.getTimeday() * 1000 == 2 * 24 * 60 * 60 * 1000) {
+                            out.collect(new Tuple2<>(event.getTimeday(), event.w1));
+                        }
+                        previousTimestamp = event.getTimeday() * 1000;
+                    }
+                });
 
-        // * ------------------------ START = AGGREGATIONS DATA
+        DataStream<Tuple2<Long, Double>> tenDaysLateStream = stream
+                .keyBy(event -> event.getTimeday() / (24 * 60 * 60 * 1000))
+                .process(new KeyedProcessFunction<Long, eachrow, Tuple2<Long, Double>>() {
+                    private Long previousTimestamp = null;
+
+                    @Override
+                    public void processElement(eachrow event, Context ctx,
+                            Collector<Tuple2<Long, Double>> out) {
+                        if (previousTimestamp != null
+                                && previousTimestamp - event.getTimeday() * 1000 >= 7 * 24 * 60 * 60 * 1000) {
+                            out.collect(new Tuple2<>(event.getTimeday(), event.w1));
+                        }
+                        previousTimestamp = event.getTimeday() * 1000;
+                    }
+                });
+        // * ------------------------ END = LATE EVENT DATA ---------------------------------
+
+        // * ------------------------ START = AGGREGATIONS DATA ---------------------------------
         WindowedStream<eachrow, Long, TimeWindow> oneDayWindowedStream = rawData
                 .assignTimestampsAndWatermarks(
                         new BoundedOutOfOrdernessTimestampExtractor<eachrow>(Time.seconds(1)) {
@@ -572,24 +594,31 @@ public class all_aggregation {
         }
 
         for (int i = 0; i < aggDayDiffList.size(); i++) {
-            DataStream<Tuple2<Long, Double>> rawDatastream = aggDayDiffList.get(i);
+            DataStream<Tuple2<Long, Double>> aggDayDiffstream = aggDayDiffList.get(i);
             String sensor = aggDayDiffSensors.get(i);
-            rawDatastream.map(
+            aggDayDiffstream.map(
                     new MapFunction<Tuple2<Long, Double>, Object>() {
                         @Override
                         public Object map(Tuple2<Long, Double> answerRow) throws Exception {
-                            writeToOpenTSDB(answerRow, sensor, false);
+                            // writeToOpenTSDB(answerRow, sensor, true);
                             return answerRow;
                         }
                     });
         }
-        env.execute("EMFANISOY REEE");
+
+        String sensor = "tenDaysLateStream";
+        tenDaysLateStream.map(
+                new MapFunction<Tuple2<Long, Double>, Object>() {
+                    @Override
+                    public Object map(Tuple2<Long, Double> answerRow) throws Exception {
+                        // writeToOpenTSDB(answerRow, sensor, false);
+                        return answerRow;
+                    }
+                });
+        env.execute("information_system_ece_ntua_2022_2023");
     }
 
     private static void writeToOpenTSDB(Tuple2<Long, Double> answerRow, String sensor, Boolean nextDayFlag) {
-        // System.out.println("answerrow = " + answerRow);
-        // System.out.println("sensor = " + sensor);
-
         RestClient client = new RestClient();
         String protocol = "http";
         String host = "localhost";
@@ -605,14 +634,13 @@ public class all_aggregation {
 
         String msg = "{\"metric\": \"%s\", \"timestamp\": %s, \"value\": %s, \"tags\": {\"%s\" : \"%s\" }}";
         DateFormat dF = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss.SSS");
-        String jsonEvent = String.format(msg, sensorName, (time), temperature, sensorName, sensorName);
+        String jsonEvent = String.format(msg, sensorName, time, temperature, sensorName, sensorName);
         eventBody = jsonEvent.getBytes();
         String convertedMsg = new String(eventBody, StandardCharsets.UTF_8);
-        // System.out.println("Final Message: " + convertedMsg);
 
         if (eventBody != null && eventBody.length > 0) {
             HttpResponse res = client.publishToOpenTSDB(protocol, host, port, path,
-            convertedMsg);
+                    convertedMsg);
             System.out.println("Response :" + res.getStatusLine());
         }
     }
