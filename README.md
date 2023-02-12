@@ -26,7 +26,7 @@
  <details><summary> Οδηγίες εγκατάστασης εφαρμογής </summary>
 <p>
 
-1. Install Docker Desktop
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 2. Για να καταβάσεις όλα τα containers, τρέξε το αρχείο `./downloadAllDocker.sh` σε ένα terminal. Βεβαιώσου από το Docker Destrop έχουν κατέβει όλα τα απαραίτητα containers.
    Σε περίπτωση προβλήματος ακολούθησε τους παρακάτω συνδέσμους για εγκατάσταση: [RabbitMQ](https://www.rabbitmq.com/download.html), [Apache Flink](https://nightlies.apache.org/flink/flink-docs-release-1.16/docs/deploymentresource-providers/standalone/docker/), [OpenTSDB](https://hub.docker.com/r/petergrace/opentsdb-docker/), [Grafana](https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker)
 
@@ -51,7 +51,7 @@
 <details><summary> Οδηγίες λειτουργίας εφαρμογής </summary>
 <p>
 
-Σε δύο terminal τρέχουμε ταυτόχρονα το java αρχείο [`all_aggregation.java`](www..gogole.com) και το python αρχείο [`send.py`](image.png).<br>
+Σε δύο terminal τρέχουμε ταυτόχρονα το java αρχείο [`all_aggregation.java`](https://github.com/john-papani/IoT-Live-streaming/blob/master/info-system-flink/src/main/java/com/infosystem/files/all_aggregation.java) και το python αρχείο [`send.py`](https://github.com/john-papani/IoT-Live-streaming/blob/master/send.py).<br>
 Έπειτα, τα δεδομένουν έχουν επεξεργαστεί και αποθηκευτεί στην βάση δεδομένων. Άρα είμαστε σε θέση μέσω του Grafana να παρατηρήσουμε τα διαγραμμάτα και τους πίνακες.
 
 </p>
@@ -66,7 +66,7 @@
 <details><summary> Οδηγίες Εκκαθάρισης Βάσης Δεδομένων</summary>
 <p>
 
-Σε περίπτωση που επιθυμούμε να διαγράψουμε ολα τα δεδομένα από την βάση δεδομένων, ανοίγουμε το terminal εσωτερικά του docker, στο **opentsdb container** και τρέχουμε τις παρακάτω εντολές.
+Σε περίπτωση που επιθυμούμε να διαγράψουμε ολα τα δεδομένα από την βάση δεδομένων, ανοίγουμε το terminal εσωτερικά του docker, στο **opentsdb container** και τρέχουμε τις παρακάτω εντολές. Για περισσότερες οδηγίες πατήστε [ΕΔΩ](https://www.docker.com/blog/integrated-terminal-for-running-containers-extended-integration-with-containerd-and-more-in-docker-desktop-4-12/).
 > **Προσοχή**: Οι παρακάτω εντολές οδηγούν στην οριστική διαγραφή των δεδομένων.
 
 ```sh
