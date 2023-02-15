@@ -6,19 +6,23 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.datastream.WindowedStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
+import org.apache.flink.streaming.api.functions.co.CoFlatMapFunction;
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
 import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
 import org.apache.flink.streaming.api.windowing.time.Time;
@@ -34,7 +38,12 @@ import com.infosystem.files.utils.eachrow;
 public class all_aggregation {
 
     public static void main(String[] args) throws Exception {
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+        Configuration cfg = new Configuration();
+        int defaultLocalParallelism = Runtime.getRuntime().availableProcessors();
+        cfg.setString("taskmanager.memory.network.max", "1gb");
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment(defaultLocalParallelism,
+                cfg);
         System.out.println("--------start---------");
 
         final RMQConnectionConfig connectionConfig = new RMQConnectionConfig.Builder()
@@ -79,6 +88,22 @@ public class all_aggregation {
                 return value.th1 > 0.0;
             }
         });
+
+        DataStream<Tuple2<Long, Double>> streamWithTwoDaysLateEvents = stream
+                .keyBy(event -> event.getTimeday() / (24 * 60 * 60 * 1000))
+                .process(new KeyedProcessFunction<Long, eachrow, Tuple2<Long, Double>>() {
+                    private Long previousTimestamp = null;
+
+                    @Override
+                    public void processElement(eachrow event, Context ctx,
+                            Collector<Tuple2<Long, Double>> out) {
+                        if (previousTimestamp != null
+                                && previousTimestamp - event.getTimeday() * 1000 <= 2 * 24 * 60 * 60 * 1000) {
+                            out.collect(new Tuple2<>(event.getTimeday(), event.w1));
+                        }
+                        previousTimestamp = event.getTimeday() * 1000;
+                    }
+                }).setParallelism(1);
 
         // * ------------------------ START = RAW DATA ---------------------------------
         SingleOutputStreamOperator<Tuple2<Long, Double>> onlyTh1 = rawData
@@ -153,12 +178,12 @@ public class all_aggregation {
                     }
                 });
 
-        SingleOutputStreamOperator<Tuple2<Long, Double>> onlyW1 = stream
-                .map(new MapFunction<eachrow, Tuple2<Long, Double>>() {
+        SingleOutputStreamOperator<Tuple2<Long, Double>> onlyW1 = streamWithTwoDaysLateEvents
+                .map(new MapFunction<Tuple2<Long, Double>, Tuple2<Long, Double>>() {
                     @Override
-                    public Tuple2<Long, Double> map(eachrow value) {
+                    public Tuple2<Long, Double> map(Tuple2<Long, Double> value) {
                         // Perform the transformation and return the new element
-                        return new Tuple2<Long, Double>(value.getTimeday() * 1000, (double) value.w1);
+                        return new Tuple2<Long, Double>(value.f0, (double) value.f1);
                     }
                 });
 
@@ -172,7 +197,8 @@ public class all_aggregation {
                 });
 
         // * ------------------------ END = RAW DATA ---------------------------------
-        // * ------------------------ START = LATE EVENT DATA ---------------------------------
+        // * ------------------------ START = LATE EVENT DATA
+        // ---------------------------------
 
         DataStream<Tuple2<Long, Double>> twoDaysLateStream = stream
                 .keyBy(event -> event.getTimeday() / (24 * 60 * 60 * 1000))
@@ -205,9 +231,10 @@ public class all_aggregation {
                         previousTimestamp = event.getTimeday() * 1000;
                     }
                 });
-        // * ------------------------ END = LATE EVENT DATA ---------------------------------
+        // * ------------------------ END = LATE EVENT DATA
 
-        // * ------------------------ START = AGGREGATIONS DATA ---------------------------------
+        // * ------------------------ START = AGGREGATIONS DATA
+
         WindowedStream<eachrow, Long, TimeWindow> oneDayWindowedStream = rawData
                 .assignTimestampsAndWatermarks(
                         new BoundedOutOfOrdernessTimestampExtractor<eachrow>(Time.seconds(1)) {
@@ -260,7 +287,7 @@ public class all_aggregation {
                         }
                         out.collect(new Tuple2<>(context.window().getStart(), sum));
                     }
-                });
+                }).setParallelism(1);
 
         SingleOutputStreamOperator<Tuple2<Long, Double>> sumHvac2 = oneDayWindowedStream
                 .process(new ProcessWindowFunction<eachrow, Tuple2<Long, Double>, Long, TimeWindow>() {
@@ -273,7 +300,7 @@ public class all_aggregation {
                         }
                         out.collect(new Tuple2<>(context.window().getStart(), sum));
                     }
-                });
+                }).setParallelism(1);
 
         SingleOutputStreamOperator<Tuple2<Long, Double>> sumMiac1 = oneDayWindowedStream
                 .process(new ProcessWindowFunction<eachrow, Tuple2<Long, Double>, Long, TimeWindow>() {
@@ -286,7 +313,7 @@ public class all_aggregation {
                         }
                         out.collect(new Tuple2<>(context.window().getStart(), sum));
                     }
-                });
+                }).setParallelism(1);
 
         SingleOutputStreamOperator<Tuple2<Long, Double>> sumMiac2 = oneDayWindowedStream
                 .process(new ProcessWindowFunction<eachrow, Tuple2<Long, Double>, Long, TimeWindow>() {
@@ -299,7 +326,7 @@ public class all_aggregation {
                         }
                         out.collect(new Tuple2<>(context.window().getStart(), sum));
                     }
-                });
+                }).setParallelism(1);
 
         SingleOutputStreamOperator<Tuple2<Long, Double>> maxEtot = oneDayWindowedStream
                 .process(new ProcessWindowFunction<eachrow, Tuple2<Long, Double>, Long, TimeWindow>() {
@@ -328,23 +355,23 @@ public class all_aggregation {
                     }
                 });
 
-        SingleOutputStreamOperator<Tuple2<Long, Double>> sumW1 = stream
+        SingleOutputStreamOperator<Tuple2<Long, Double>> sumW1 = streamWithTwoDaysLateEvents
                 .assignTimestampsAndWatermarks(
-                        new BoundedOutOfOrdernessTimestampExtractor<eachrow>(Time.days(1)) {
+                        new BoundedOutOfOrdernessTimestampExtractor<Tuple2<Long, Double>>(Time.days(1)) {
                             @Override
-                            public long extractTimestamp(eachrow element) {
-                                return element.getTimeday() * 1000;
+                            public long extractTimestamp(Tuple2<Long, Double> element) {
+                                return element.f0 * 1000;
                             }
                         })
-                .keyBy(tuple -> tuple.getTimeday() / (24 * 60 * 60 * 1000))
+                .keyBy(tuple -> tuple.f0 / (24 * 60 * 60 * 1000))
                 .timeWindow(Time.days(1))
-                .process(new ProcessWindowFunction<eachrow, Tuple2<Long, Double>, Long, TimeWindow>() {
+                .process(new ProcessWindowFunction<Tuple2<Long, Double>, Tuple2<Long, Double>, Long, TimeWindow>() {
                     @Override
-                    public void process(Long key, Context context, Iterable<eachrow> elements,
+                    public void process(Long key, Context context, Iterable<Tuple2<Long, Double>> elements,
                             Collector<Tuple2<Long, Double>> out) {
                         double sum = 0;
-                        for (eachrow element : elements) {
-                            sum += element.w1;
+                        for (Tuple2<Long, Double> element : elements) {
+                            sum += element.f1;
                         }
                         out.collect(new Tuple2<>(context.window().getStart(), sum));
                     }
@@ -391,7 +418,7 @@ public class all_aggregation {
                     public Tuple2<Long, Double> map(Tuple2<Long, Double> value) throws Exception {
                         return Tuple2.of(value.f0, value.f1);
                     }
-                });
+                }).setParallelism(1);
 
         DataStream<Tuple2<Long, Double>> diffMaxWtot = maxWtot
                 .map(new MapFunction<Tuple2<Long, Double>, Tuple2<Long, Double>>() {
@@ -418,112 +445,76 @@ public class all_aggregation {
                     }
                 });
 
-        // diffMaxWtot.print("diffmaxwotot").setParallelism(1);
-
         // * ------------------------ END AggDayDiff[y] --------------
 
         // * ------------------------ START AggDayRest[y] 1--------------
         // ? AggDayDiff[Etot] - AggDay[HVAC1] - AggDay[HVAC2] - AggDay[MiAC1]
         // ? -AggDay[MiAC2]
-        {
-            // sumHvac1.print("sumHvac1");
-            // sumHvac2.print("sumHvac2");
-            // sumMiac1.print("sumMiac1");
-            // sumMiac2.print("sumMiac2");
-            // DataStream<Tuple2<Long, Double>> stream1 = diffMaxEtot;
-            // DataStream<Tuple2<Long, Double>> stream2 = sumHvac1;
-            // DataStream<Tuple2<Long, Double>> stream3 = sumHvac2;
-            // DataStream<Tuple2<Long, Double>> stream4 = sumMiac1;
-            // DataStream<Tuple2<Long, Double>> stream5 = sumMiac2;
 
-            // DataStream<Tuple2<Long, Double>> combinedStream =
-            // diffMaxEtot.connect(sumHvac1)
-            // .connect(sumHvac2)
-            // .connect(sumMiac1)
-            // .connect(sumMiac2)
-            // .flatMap(
-            // new CoFlatMapFunction<Tuple2<Long, Double>, Tuple2<Long, Double>,
-            // Tuple2<Long, Double>, Tuple2<Long, Double>, Tuple2<Long, Double>>() {
+        DataStream<Tuple2<Long, Double>> lastSumStream = sumHvac1
+                .union(sumHvac2, sumMiac1, sumMiac2)
+                .keyBy(0)
+                .sum(1)
+                .setParallelism(1);
 
-            // private Tuple2<Long, Double> diffMaxEtot;
-            // private Tuple2<Long, Double> sumHvac1;
-            // private Tuple2<Long, Double> sumHvac2;
-            // private Tuple2<Long, Double> sumMiac1;
+        DataStream<Tuple2<Long, Double>> aggDayEtot_Hvac_Miac = lastSumStream
+                .keyBy(0)
+                .connect(diffMaxEtot.keyBy(0))
+                .flatMap(new CoFlatMapFunction<Tuple2<Long, Double>, Tuple2<Long, Double>, Tuple2<Long, Double>>() {
+                    Tuple2<Long, Double> sum = null;
 
-            // @Override
-            // public void flatMap1(Tuple2<Long, Double> value, Collector<Tuple2<Long,
-            // Double>> out)
-            // throws Exception {
-            // diffMaxEtot = value;
-            // }
+                    @Override
+                    public void flatMap1(Tuple2<Long, Double> value, Collector<Tuple2<Long, Double>> out)
+                            throws Exception {
+                        if (sum == null) {
+                            out.collect(value);
+                        } else {
+                            out.collect(Tuple2.of(value.f0, sum.f1 - value.f1));
+                        }
+                    }
 
-            // @Override
-            // public void flatMap2(Tuple2<Long, Double> value, Collector<Tuple2<Long,
-            // Double>> out)
-            // throws Exception {
-            // sumHvac1 = value;
-            // }
+                    @Override
+                    public void flatMap2(Tuple2<Long, Double> value, Collector<Tuple2<Long, Double>> out)
+                            throws Exception {
+                        sum = value;
+                    }
+                });
 
-            // @Override
-            // public void flatMap3(Tuple2<Long, Double> value, Collector<Tuple2<Long,
-            // Double>> out)
-            // throws Exception {
-            // sumHvac2 = value;
-            // }
+        // aggDayEtot_Hvac_Miac.print("1").setParallelism(1);
 
-            // @Override
-            // public void flatMap4(Tuple2<Long, Double> value, Collector<Tuple2<Long,
-            // Double>> out)
-            // throws Exception {
-            // sumMiac1 = value;
-            // }
+        // *------------------------ END AggDayRest[y] 1 --------------
 
-            // @Override
-            // public void flatMap5(Tuple2<Long, Double> value, Collector<Tuple2<Long,
-            // Double>> out)
-            // throws Exception {
-            // if (diffMaxEtot != null && sumHvac1 != null && sumHvac2 != null
-            // && sumMiac1 != null) {
-            // double result = diffMaxEtot.f1 - sumHvac1.f1 - sumHvac2.f1 - sumMiac1.f1
-            // - value.f1;
-            // out.collect(new Tuple2<>(value.f0, result));
-            // sumHvac1 = null;
-            // sumHvac1 = null;
-            // sumHvac2 = null;
-            // sumMiac1 = null;
-            // }
-            // }
-            // });
-        }
-        // * ------------------------ END AggDayRest[y] 1 --------------
+        // *------------------------ START AggDayRest[y] 2--------------
+        // ? AggDayDiff[Wto] – AggDay[W1]
 
-        // * ------------------------ START AggDayRest[y] 2--------------
-        // ?AggDayDiff[Wto] – AggDay[W1]
-        {
-            // DataStream<Tuple2<Long, Double>> aggDiffWto_DayW1 =
-            // diffMaxWtot.connect(sumW1)
-            // .flatMap(new CoFlatMapFunction<Tuple2<Long, Double>, Tuple2<Long, Double>,
-            // Tuple2<Long, Double>>() {
-            // private Tuple2<Long, Double> firstValue = null;
+        DataStream<Tuple2<Long, Double>> aggDiffWto_DayW1 = diffMaxWtot.keyBy(0).connect(sumW1.keyBy(0))
+                .flatMap(new CoFlatMapFunction<Tuple2<Long, Double>, Tuple2<Long, Double>, Tuple2<Long, Double>>() {
+                    Map<Long, Double> values = new HashMap<>();
 
-            // @Override
-            // public void flatMap1(Tuple2<Long, Double> value, Collector<Tuple2<Long,
-            // Double>> out)
-            // throws Exception {
-            // firstValue = value;
-            // }
+                    @Override
+                    public void flatMap1(Tuple2<Long, Double> value1, Collector<Tuple2<Long, Double>> out)
+                            throws Exception {
+                        Double value2 = values.get(value1.f0);
+                        if (value2 != null) {
+                            out.collect(new Tuple2<>(value1.f0, value1.f1 - value2));
+                            values.remove(value1.f0);
+                        } else {
+                            values.put(value1.f0, value1.f1);
+                        }
+                    }
 
-            // @Override
-            // public void flatMap2(Tuple2<Long, Double> value, Collector<Tuple2<Long,
-            // Double>> out)
-            // throws Exception {
-            // if (firstValue != null) {
-            // out.collect(new Tuple2<>(value.f0, firstValue.f1 - value.f1));
-            // }
-            // }
-            // });
-        }
-
+                    @Override
+                    public void flatMap2(Tuple2<Long, Double> value2, Collector<Tuple2<Long, Double>> out)
+                            throws Exception {
+                        Double value1 = values.get(value2.f0);
+                        if (value1 != null) {
+                            out.collect(new Tuple2<>(value2.f0, value1 - value2.f1));
+                            values.remove(value2.f0);
+                        } else {
+                            values.put(value2.f0, value2.f1);
+                        }
+                    }
+                });
         // * ------------------------ END AggDayRest[y] 2 --------------
 
         // ! auto kanei mapping kathe seira kai na thn grafei sthn bash
@@ -555,9 +546,15 @@ public class all_aggregation {
         aggList.add(sumW1);
         aggList.add(maxWtot);
 
-        List<DataStream<Tuple2<Long, Double>>> aggDayDiffList = new ArrayList<>();
-        aggDayDiffList.add(diffMaxEtot);
-        aggDayDiffList.add(diffMaxWtot);
+        List<DataStream<Tuple2<Long, Double>>> aggDayList = new ArrayList<>();
+        aggDayList.add(diffMaxEtot);
+        aggDayList.add(diffMaxWtot);
+        aggDayList.add(aggDiffWto_DayW1);
+        aggDayList.add(aggDayEtot_Hvac_Miac);
+
+        List<DataStream<Tuple2<Long, Double>>> lateEventList = new ArrayList<>();
+        lateEventList.add(twoDaysLateStream);
+        lateEventList.add(tenDaysLateStream);
 
         List<String> sensors = Arrays.asList("th1", "th2", "hvac1", "hvac2", "miac1",
                 "miac2", "etot", "mov1", "w1",
@@ -565,7 +562,9 @@ public class all_aggregation {
         List<String> aggSensors = Arrays.asList("avgTh1", "avgTh2", "sumHvac1",
                 "sumHvac2", "sumMiac1", "sumMiac2", "maxEtot", "sumMov1", "sumW1",
                 "maxWtot");
-        List<String> aggDayDiffSensors = Arrays.asList("diffMaxEtot", "diffMaxEtot");
+        List<String> aggDaySensors = Arrays.asList("diffMaxEtot", "diffMaxWtot", "aggDiffWto_DayW1",
+                "aggDayEtot_Hvac_Miac");
+        List<String> lateEventSensors = Arrays.asList("twoDaysLateStream", "tenDaysLateStream");
 
         for (int i = 0; i < rawDataList.size(); i++) {
             SingleOutputStreamOperator<Tuple2<Long, Double>> rawDatastream = rawDataList.get(i);
@@ -593,28 +592,83 @@ public class all_aggregation {
                     });
         }
 
-        for (int i = 0; i < aggDayDiffList.size(); i++) {
-            DataStream<Tuple2<Long, Double>> aggDayDiffstream = aggDayDiffList.get(i);
-            String sensor = aggDayDiffSensors.get(i);
+        for (int i = 0; i < aggDayList.size(); i++) {
+            DataStream<Tuple2<Long, Double>> aggDayDiffstream = aggDayList.get(i);
+            String sensor = aggDaySensors.get(i);
             aggDayDiffstream.map(
                     new MapFunction<Tuple2<Long, Double>, Object>() {
                         @Override
                         public Object map(Tuple2<Long, Double> answerRow) throws Exception {
-                            // writeToOpenTSDB(answerRow, sensor, true);
+                            writeToOpenTSDB(answerRow, sensor, true);
                             return answerRow;
                         }
                     });
         }
 
-        String sensor = "tenDaysLateStream";
-        tenDaysLateStream.map(
-                new MapFunction<Tuple2<Long, Double>, Object>() {
-                    @Override
-                    public Object map(Tuple2<Long, Double> answerRow) throws Exception {
-                        // writeToOpenTSDB(answerRow, sensor, false);
-                        return answerRow;
-                    }
-                });
+        for (int i = 0; i < lateEventList.size(); i++) {
+            DataStream<Tuple2<Long, Double>> lateEventItem = lateEventList.get(i);
+            String sensor = lateEventSensors.get(i);
+            lateEventItem.map(
+                    new MapFunction<Tuple2<Long, Double>, Object>() {
+                        @Override
+                        public Object map(Tuple2<Long, Double> answerRow) throws Exception {
+                            writeToOpenTSDB(answerRow, sensor, false);
+                            return answerRow;
+                        }
+                    });
+        }
+
+        // final String URL = "ws://localhost:3000/api/live/push/";
+        // final String HEADER_NAME = "Authorization";
+        // final String token =
+        // "eyJrIjoiU3cwcDZsR2ZWN2JUUHJKbk1pT1pVbERGc1FuUUJXMDUiLCJuIjoid2Vic29ja2V0IiwiaWQiOjF9";
+        // final String HEADER_VALUE = "Bearer ";
+        // DataStream<Object> tasa = tenDaysLateStream.map(tuple -> {
+        // OkHttpClient client = new OkHttpClient.Builder()
+        // .readTimeout(0, TimeUnit.MILLISECONDS)
+        // .build();
+
+        // Request request = new Request.Builder()
+        // .url(URL)
+        // .addHeader(HEADER_NAME, HEADER_VALUE
+        // +
+        // "eyJrIjoiU3cwcDZsR2ZWN2JUUHJKbk1pT1pVbERGc1FuUUJXMDUiLCJuIjoid2Vic29ja2V0IiwiaWQiOjF9")
+        // .build();
+
+        // client.newWebSocket(request, new WebSocketListener() {
+        // @Override
+        // public void onOpen(WebSocket webSocket, okhttp3.Response response) {
+        // System.out.println("Connected to Grafana WebSocket");
+        // webSocket.send(tuple.toString());
+        // }
+
+        // @Override
+        // public void onMessage(WebSocket webSocket, String text) {
+        // System.out.println("Received message: " + text);
+        // }
+
+        // @Override
+        // public void onClosing(WebSocket webSocket, int code, String reason) {
+        // System.out.println("Connection closing with code: " + code + " and reason: "
+        // + reason);
+        // }
+
+        // @Override
+        // public void onClosed(WebSocket webSocket, int code, String reason) {
+        // System.out.println("Connection closed with code: " + code + " and reason: " +
+        // reason);
+        // }
+
+        // @Override
+        // public void onFailure(WebSocket webSocket, Throwable t, okhttp3.Response
+        // response) {
+        // System.out.println("Error: " + t.getMessage());
+        // }
+        // });
+        // return tuple;
+        // });
+        // tasa.print();
+
         env.execute("information_system_ece_ntua_2022_2023");
     }
 
@@ -641,7 +695,7 @@ public class all_aggregation {
         if (eventBody != null && eventBody.length > 0) {
             HttpResponse res = client.publishToOpenTSDB(protocol, host, port, path,
                     convertedMsg);
-            System.out.println("Response :" + res.getStatusLine());
+            System.out.println("Response: " + res.getStatusLine());
         }
     }
 }
