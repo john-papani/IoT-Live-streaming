@@ -30,6 +30,8 @@
 2. Για να καταβάσεις όλα τα containers, τρέξε το αρχείο `./downloadAllDocker.sh` σε ένα terminal. Βεβαιώσου από το Docker Destrop έχουν κατέβει όλα τα απαραίτητα containers.
    Σε περίπτωση προβλήματος ακολούθησε τους παρακάτω συνδέσμους για εγκατάσταση: [RabbitMQ](https://www.rabbitmq.com/download.html), [Apache Flink](https://nightlies.apache.org/flink/flink-docs-release-1.16/docs/deploymentresource-providers/standalone/docker/), [OpenTSDB](https://hub.docker.com/r/petergrace/opentsdb-docker/), [Grafana](https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker)
 
+> Στο OpenTSDB container, Θα πρέπει να πειράξουμε μία παράμετρο (configuration) εσωτερικά, απαραίτητη για την αποθήκευση των δεδομένων μετέπειτα. Για αυτό το σκοπό, ανοίγουμε ένα terminal για το συγκεκριμένο container, και βρίσκουμε το αρχείο `opentsdb.conf`. To αρχείο βρίσκεται εσωτερικά του φακέλου `/usr/local/share/opentsdb/etc/opentsdb`. Ανοίγουμε το αρχείο *`(vi opentsdb.conf)`* και προσθέτουμε στο τέλος το εξής: `tsd.storage.fix_duplicates = true`. Τέλος κλείνουμε και αποθηκεύουμε το αρχείο *(:wq)* και επανεκκινούμε το container ώστε να ενημερωθεί το configuration. Με την ‘ενεργοποίηση’ αυτού του flag, επιλύονται πιθανά προβλήματα εγγραφής διπλότυπων τιμών, μιας και έτσι θα διατηρείται το πιο πρόσφατο σημείο δεδομένων.
+
 3. Εγκατέστησε την [Java 11](https://www.oracle.com/java/technologies/javase/jdk11-archive-downloads.html) - _προσοχή με τα path_.
 4. Εγκατέστησε την [Python](https://www.python.org/downloads/release/python-3108/).
 
