@@ -26,7 +26,7 @@
  <details><summary> Οδηγίες εγκατάστασης εφαρμογής </summary>
 <p>
 
-1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+1. Εγκατέστησε το [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 2. Για να καταβάσεις όλα τα containers, τρέξε το αρχείο `./downloadAllDocker.sh` σε ένα terminal. Βεβαιώσου από το Docker Destrop έχουν κατέβει όλα τα απαραίτητα containers.
    Σε περίπτωση προβλήματος ακολούθησε τους παρακάτω συνδέσμους για εγκατάσταση: [RabbitMQ](https://www.rabbitmq.com/download.html), [Apache Flink](https://nightlies.apache.org/flink/flink-docs-release-1.16/docs/deploymentresource-providers/standalone/docker/), [OpenTSDB](https://hub.docker.com/r/petergrace/opentsdb-docker/), [Grafana](https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker)
 
@@ -37,8 +37,8 @@
 
 ---
 
-5. Κατέβασε τοπικά το repository (clone || download-zip).
-6. Έπειτα `cd ...`.
+5. Κατέβασε τοπικά το repository: `clone https://github.com/john-papani/IoT-Live-streaming.git`
+6. Έπειτα `cd IoT-Live-streaming`.
 7. Τρέξε το αρχείο `./installMvnFlink.sh`
 
 </p>
@@ -93,6 +93,11 @@ tsdb scan 2022/01/01 --delete  none sumW1
 
 tsdb scan 2022/01/01 --delete  none diffMaxEtot
 tsdb scan 2022/01/01 --delete  none diffMaxWtot
+tsdb scan 2022/01/01 --delete  none aggDiffWto_DayW1
+tsdb scan 2022/01/01 --delete  none aggDayEtot_Hvac_Miac
+
+tsdb scan 2022/01/01 --delete  none twoDaysLateStream
+tsdb scan 2022/01/01 --delete  none tenDaysLateStream
 ```
 </p>
 </details>
