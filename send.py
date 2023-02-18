@@ -12,7 +12,7 @@ channel.queue_declare(queue='dataQueue', durable=True)
 
 try:
     # while True :
-            with open('./data/events_.json', 'r') as f:
+            with open('./data/events_int.json', 'r') as f:
                 events = f.read().strip().split('\n')
             for event in events[1:-1]:
                 if event[-1] == ",":
