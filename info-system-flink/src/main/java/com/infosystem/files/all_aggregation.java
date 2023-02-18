@@ -89,7 +89,7 @@ public class all_aggregation {
             }
         });
 
-        DataStream<Tuple2<Long, Double>> streamWithTwoDaysLateEvents = stream
+        DataStream<Tuple2<Long, Double>> streamWithTwoDaysLateEventsW1 = stream
                 .keyBy(event -> event.getTimeday() / (24 * 60 * 60 * 1000))
                 .process(new KeyedProcessFunction<Long, eachrow, Tuple2<Long, Double>>() {
                     private Long previousTimestamp = null;
@@ -178,7 +178,7 @@ public class all_aggregation {
                     }
                 });
 
-        SingleOutputStreamOperator<Tuple2<Long, Double>> onlyW1 = streamWithTwoDaysLateEvents
+        SingleOutputStreamOperator<Tuple2<Long, Double>> onlyW1 = streamWithTwoDaysLateEventsW1
                 .map(new MapFunction<Tuple2<Long, Double>, Tuple2<Long, Double>>() {
                     @Override
                     public Tuple2<Long, Double> map(Tuple2<Long, Double> value) {
@@ -200,7 +200,7 @@ public class all_aggregation {
         // * ------------------------ START = LATE EVENT DATA
         // ---------------------------------
 
-        DataStream<Tuple2<Long, Double>> twoDaysLateStream = stream
+        DataStream<Tuple2<Long, Double>> twoDaysLateStreamW1 = stream
                 .keyBy(event -> event.getTimeday() / (24 * 60 * 60 * 1000))
                 .process(new KeyedProcessFunction<Long, eachrow, Tuple2<Long, Double>>() {
                     private Long previousTimestamp = null;
@@ -216,7 +216,7 @@ public class all_aggregation {
                     }
                 });
 
-        DataStream<Tuple2<Long, Double>> tenDaysLateStream = stream
+        DataStream<Tuple2<Long, Double>> tenDaysLateStreamW1 = stream
                 .keyBy(event -> event.getTimeday() / (24 * 60 * 60 * 1000))
                 .process(new KeyedProcessFunction<Long, eachrow, Tuple2<Long, Double>>() {
                     private Long previousTimestamp = null;
@@ -355,7 +355,7 @@ public class all_aggregation {
                     }
                 });
 
-        SingleOutputStreamOperator<Tuple2<Long, Double>> sumW1 = streamWithTwoDaysLateEvents
+        SingleOutputStreamOperator<Tuple2<Long, Double>> sumW1 = streamWithTwoDaysLateEventsW1
                 .assignTimestampsAndWatermarks(
                         new BoundedOutOfOrdernessTimestampExtractor<Tuple2<Long, Double>>(Time.days(1)) {
                             @Override
@@ -553,8 +553,8 @@ public class all_aggregation {
         aggDayList.add(aggDayEtot_Hvac_Miac);
 
         List<DataStream<Tuple2<Long, Double>>> lateEventList = new ArrayList<>();
-        lateEventList.add(twoDaysLateStream);
-        lateEventList.add(tenDaysLateStream);
+        lateEventList.add(twoDaysLateStreamW1);
+        lateEventList.add(tenDaysLateStreamW1);
 
         List<String> sensors = Arrays.asList("th1", "th2", "hvac1", "hvac2", "miac1",
                 "miac2", "etot", "mov1", "w1",
@@ -564,7 +564,7 @@ public class all_aggregation {
                 "maxWtot");
         List<String> aggDaySensors = Arrays.asList("diffMaxEtot", "diffMaxWtot", "aggDiffWto_DayW1",
                 "aggDayEtot_Hvac_Miac");
-        List<String> lateEventSensors = Arrays.asList("twoDaysLateStream", "tenDaysLateStream");
+        List<String> lateEventSensors = Arrays.asList("twoDaysLateStreamW1", "tenDaysLateStreamW1");
 
         for (int i = 0; i < rawDataList.size(); i++) {
             SingleOutputStreamOperator<Tuple2<Long, Double>> rawDatastream = rawDataList.get(i);
@@ -617,58 +617,6 @@ public class all_aggregation {
                         }
                     });
         }
-
-        // final String URL = "ws://localhost:3000/api/live/push/";
-        // final String HEADER_NAME = "Authorization";
-        // final String token =
-        // "eyJrIjoiU3cwcDZsR2ZWN2JUUHJKbk1pT1pVbERGc1FuUUJXMDUiLCJuIjoid2Vic29ja2V0IiwiaWQiOjF9";
-        // final String HEADER_VALUE = "Bearer ";
-        // DataStream<Object> tasa = tenDaysLateStream.map(tuple -> {
-        // OkHttpClient client = new OkHttpClient.Builder()
-        // .readTimeout(0, TimeUnit.MILLISECONDS)
-        // .build();
-
-        // Request request = new Request.Builder()
-        // .url(URL)
-        // .addHeader(HEADER_NAME, HEADER_VALUE
-        // +
-        // "eyJrIjoiU3cwcDZsR2ZWN2JUUHJKbk1pT1pVbERGc1FuUUJXMDUiLCJuIjoid2Vic29ja2V0IiwiaWQiOjF9")
-        // .build();
-
-        // client.newWebSocket(request, new WebSocketListener() {
-        // @Override
-        // public void onOpen(WebSocket webSocket, okhttp3.Response response) {
-        // System.out.println("Connected to Grafana WebSocket");
-        // webSocket.send(tuple.toString());
-        // }
-
-        // @Override
-        // public void onMessage(WebSocket webSocket, String text) {
-        // System.out.println("Received message: " + text);
-        // }
-
-        // @Override
-        // public void onClosing(WebSocket webSocket, int code, String reason) {
-        // System.out.println("Connection closing with code: " + code + " and reason: "
-        // + reason);
-        // }
-
-        // @Override
-        // public void onClosed(WebSocket webSocket, int code, String reason) {
-        // System.out.println("Connection closed with code: " + code + " and reason: " +
-        // reason);
-        // }
-
-        // @Override
-        // public void onFailure(WebSocket webSocket, Throwable t, okhttp3.Response
-        // response) {
-        // System.out.println("Error: " + t.getMessage());
-        // }
-        // });
-        // return tuple;
-        // });
-        // tasa.print();
-
         env.execute("information_system_ece_ntua_2022_2023");
     }
 
@@ -687,7 +635,6 @@ public class all_aggregation {
         }
 
         String msg = "{\"metric\": \"%s\", \"timestamp\": %s, \"value\": %s, \"tags\": {\"%s\" : \"%s\" }}";
-        DateFormat dF = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss.SSS");
         String jsonEvent = String.format(msg, sensorName, time, temperature, sensorName, sensorName);
         eventBody = jsonEvent.getBytes();
         String convertedMsg = new String(eventBody, StandardCharsets.UTF_8);

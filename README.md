@@ -98,8 +98,8 @@ tsdb scan 2022/01/01 --delete  none diffMaxWtot
 tsdb scan 2022/01/01 --delete  none aggDiffWto_DayW1
 tsdb scan 2022/01/01 --delete  none aggDayEtot_Hvac_Miac
 
-tsdb scan 2022/01/01 --delete  none twoDaysLateStream
-tsdb scan 2022/01/01 --delete  none tenDaysLateStream
+tsdb scan 2022/01/01 --delete  none twoDaysLateStreamW1
+tsdb scan 2022/01/01 --delete  none tenDaysLateStreamW1
 ```
 </p>
 </details>
