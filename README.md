@@ -2,7 +2,8 @@
 
 <p align="center"> 	This project was part of the Analysis and Design of Information Systems course at NTUA. (2022-23, Fall Semester) <p>
 
-## IoT-Live-streaming
+
+## IoT-Live-streaming ~ TEAM 10
 <p align="center">
 <img src="https://c0.wallpaperflare.com/preview/216/276/927/business-city-communication-connection.jpg" width="700" height="400">
 </p>
