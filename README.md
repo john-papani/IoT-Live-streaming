@@ -40,7 +40,7 @@
 
 ---
 
-5. Κατέβασε τοπικά το repository: `clone https://github.com/john-papani/IoT-Live-streaming.git`
+5. Κατέβασε τοπικά το repository: `git clone https://github.com/john-papani/IoT-Live-streaming.git`
 6. Έπειτα `cd IoT-Live-streaming`.
 7. Τρέξε το αρχείο `./installMvnFlink.sh`
 
